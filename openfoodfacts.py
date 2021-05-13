@@ -11,8 +11,10 @@ def scrap_openfoodfacts(nb_pages = 50) :
     Cette dernière crée dans votre espace de travail un DataFrame Pandas contenant les informations scrapées sur le site OpenFoodFacts.
     L'argument "nb_pages" permet de régler le nombre de page à scraper.
     Veuillez ne pas trop l'augmenter afin que l'opération prenne un temps raisonnable.
-    Il faut compter environ 25 secondes pour scraper une page.
+    Il faut compter environ 30 secondes pour scraper une page (25 minutes pour les 50 pages par défaut).
+    27 variables sont scrapées pour chaque nouvelle donnée.
     """
+    # Importation des modules
     import time
     from time import sleep
     import numpy as np
@@ -20,11 +22,15 @@ def scrap_openfoodfacts(nb_pages = 50) :
     import re
     from bs4 import BeautifulSoup
     
+    # Mesure du temps
     start_time = time.time()
-
+    
+    # Initialisation de la liste records récoltant nos données
     records = []
+    #Initialisation de la valeur des erreurs à implémenter dans le DataSet
     error = np.NaN
-
+    
+    # On récupère l'url de chaque produit sur le nombre de pages souhaitées
     for i in range(1,nb_pages+1) :
 
         r = requests.get(('https://fr.openfoodfacts.org/' + str(i)))
@@ -36,11 +42,12 @@ def scrap_openfoodfacts(nb_pages = 50) :
 
         liste_url = ['https://fr.openfoodfacts.org/' + elt['href'] for elt in products]
 
-
+        # Pour chaque produit on place dans des variables les données que l'on souhaite scraper
         for url in liste_url :
                 s = requests.get(url)
                 soup = BeautifulSoup(s.text, 'html.parser')
-
+                
+                # Si la donnée peut être récupérée, on la place dans notre variable, sinon on la replace par une erreur
                 try :            
                     name = soup.title.text[:-2]
                 except :
@@ -87,7 +94,8 @@ def scrap_openfoodfacts(nb_pages = 50) :
                 except : 
                     repère_nutritionnels = error
                     
-                # On découpe les repères nutritionnels en 4 variabes distinctes    
+                # On découpe les repères nutritionnels en 4 variabes distinctes (matière grasse, acide gras, sucre et sel)
+                # Puis on les transforme en float pour faciliter l'analyse
                 liste_repères_nutri = repères_nutritionnels
                 
                 try :
@@ -113,7 +121,8 @@ def scrap_openfoodfacts(nb_pages = 50) :
                     sel = [float(elt) for elt in sel.split() if elt.replace('.', '').isdigit()].pop()
                 except : 
                     sel = error
-
+                
+                # On utilise la même méthode sur les KJ et les KCAL pour les transformer en float
                 try :
                     kj = soup.find(id="nutriment_energy-kj_tr").find('td', {'class' : 'nutriment_value'}).text[9: 13]
                     kj = [float(elt) for elt in kj.split() if elt.replace('.', '').isdigit()].pop()
@@ -131,7 +140,7 @@ def scrap_openfoodfacts(nb_pages = 50) :
                 except :
                     eco_score = error
 
-                #Pour toutes les variables suivantes; l'utilisation de Regex va nous faciliter la tâche
+                #Pour toutes les variables suivantes; l'utilisation de Regex va nous permettre d'extraire la donnée
                 info = soup.find('div',{ 'class':'medium-12 large-8 xlarge-8 xxlarge-8 columns'})
                 infos = []
 
@@ -215,8 +224,12 @@ def scrap_openfoodfacts(nb_pages = 50) :
                                 origine, pays, nb_pays, matière_grasse, acide_gras, sucre, sel))
 
         i+=1
+        
+        # On laisse un temps d'attente entre chaque itération pour ne pas provoquer une erreur dû au trop grand nombre de requêtes envoyées 
+        # vers Open Fact Food
         sleep(1)
 
+    # On construit le DataFrame, puis on l'exporte dans l'espace de travail
     import pandas as pd
     df = pd.DataFrame(records, columns = ['Produit', 'CodeBarre', 'NutriScore', 'Nova', 'Caractéristiques', 'Ingrédients', 
                                       'NoPalme','Palme', 'KJ', 'KCAL', 'Eco-Score', 'Quantité', 'Conditionnement', 
@@ -225,5 +238,6 @@ def scrap_openfoodfacts(nb_pages = 50) :
 
     df.to_csv('openfoodfacts.csv', index=False, encoding='utf-8')
 
+    # On affiche le temps d'éxecution de la fonction
     print("Temps d'éxecution : "+"--- %s seconds ---" % (time.time() - start_time))
     print("Merci pour votre patience !")
